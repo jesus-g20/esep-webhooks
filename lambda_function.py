@@ -3,57 +3,43 @@ import os
 import urllib.request
 
 def lambda_handler(event, context):
-    # Log the incoming event (for debugging)
-    print("GitHub Webhook received:")
+    print("FunctionHandler received:")
     print(json.dumps(event))
 
-    # Extract the issue URL from the GitHub Issues event payload
-    try:
-        issue_url = event["issue"]["html_url"]
-    except Exception as e:
-        print("Error extracting issue URL:", e)
+    # event already contains the GitHub payload
+    # {"action": "opened", "issue": { ... }}
+    if "issue" not in event:
         return {
             "statusCode": 400,
-            "body": "Invalid GitHub Issues payload"
+            "body": json.dumps("No issue in payload")
         }
 
-    # Create Slack message payload
-    slack_payload = {
+    issue_url = event["issue"]["html_url"]
+
+    payload = {
         "text": f"Issue Created: {issue_url}"
     }
 
-    # Get Slack webhook URL from environment variable
-    slack_url = os.environ.get("SLACK_URL")
+    slack_url = os.environ["SLACK_URL"]
 
-    if not slack_url:
-        return {
-            "statusCode": 500,
-            "body": "SLACK_URL environment variable not set"
-        }
+    # Send Slack POST request
+    data = json.dumps(payload).encode("utf-8")
 
-    # Convert the payload to JSON
-    data = json.dumps(slack_payload).encode("utf-8")
-
-    # Prepare request to send to Slack
-    request = urllib.request.Request(
+    req = urllib.request.Request(
         slack_url,
         data=data,
-        headers={"Content-Type": "application/json"}
+        headers={"Content-Type": "application/json"},
+        method="POST"
     )
 
-    # Send the request to Slack
     try:
-        response = urllib.request.urlopen(request)
-        response_body = response.read().decode("utf-8")
-        print("Slack response:", response_body)
+        with urllib.request.urlopen(req) as resp:
+            resp_body = resp.read().decode("utf-8")
+            print("Slack Response:", resp_body)
     except Exception as e:
-        print("Error sending to Slack:", e)
-        return {
-            "statusCode": 500,
-            "body": "Failed to send Slack message"
-        }
+        print("Slack ERROR:", str(e))
 
     return {
         "statusCode": 200,
-        "body": f"Webhook received, issue sent to Slack: {issue_url}"
+        "body": json.dumps("Webhook received")
     }
